@@ -1,3 +1,3 @@
 # JS_threejs
-[CG_Final]
-Learning to use threes
+Learning to use three.js
+Code path:/examples/CG_Final.html
