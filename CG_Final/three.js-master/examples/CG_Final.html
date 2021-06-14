@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Finalterm</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+
+	</head>
+
+	<body>
+		<div id="btns" style="text-align: center;">
+			<a class="btn">Idle</a>
+			<a class="btn">Walk</a>
+			<a class="btn">Dance</a>
+			<a class="btn">Die</a>
+		</div>
+
+
+		<script type="module">
+
+
+
+			import * as THREE from '../build/three.module.js';
+
+			import Stats from './jsm/libs/stats.module.js';
+
+			import { OrbitControls } from './jsm/controls/OrbitControls.js';
+			import { FBXLoader } from './jsm/loaders/FBXLoader.js';
+			import { GUI } from './jsm/libs/dat.gui.module.js';
+
+			let camera, scene, renderer, stats, mixer, actions, anims, gui, groundColorSet;
+
+			const clock = new THREE.Clock();
+
+
+			init();
+			animate();
+
+			function init() 
+			{
+
+
+				const container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 2000 );
+				camera.position.set( 100, 200, 300 );
+
+				scene = new THREE.Scene();
+				//scene.background = new THREE.Color( 0xa0a0a0 );
+				//scene.fog = new THREE.Fog( 0xa0a0a0, 200, 1000 );
+
+				var pointColor = "#ffffff";
+
+
+				const hemiLight = new THREE.HemisphereLight( pointColor );
+				hemiLight.visible = true;
+				hemiLight.position.set( 0, 200, 0 );
+				scene.add( hemiLight );
+				
+				
+				const dirLight = new THREE.DirectionalLight( pointColor );
+				dirLight.visible = true;
+				dirLight.position.set( 0, 200, 100 );
+				dirLight.castShadow = true;
+				dirLight.shadow.camera.top = 180;
+				dirLight.shadow.camera.bottom = - 100;
+				dirLight.shadow.camera.left = - 120;
+				dirLight.shadow.camera.right = 120;
+				scene.add( dirLight );
+
+				// scene.add( new THREE.CameraHelper( dirLight.shadow.camera ) );
+
+				// ground
+				const meshPhongMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, depthWrite: false });
+				const planeGeometry = new THREE.PlaneGeometry( 2000, 2000 );
+				const mesh = new THREE.Mesh(planeGeometry, meshPhongMaterial);
+				mesh.rotation.x = - Math.PI / 2;
+				mesh.receiveShadow = true;
+				scene.add( mesh );
+
+				let index = 0;
+				const btns = document.getElementById("btns");
+				btns.childNodes.forEach( function(btn) 
+				{
+					if (btn.innerHTML !== undefined)
+					{
+						btn.addEventListener('click', playAction.bind(this, index));
+						index++;
+					}
+				});
+
+				// model
+				anims = ["Walk", "Dance", "Die"];
+
+				const loader = new FBXLoader();
+				loader.setPath('models/fbx/');
+				loader.load( 'Mouse.fbx', function ( object ) 
+				{
+					mixer = new THREE.AnimationMixer( object );
+					actions = [];
+					const action = mixer.clipAction( object.animations[ 0 ] );
+					action.play();
+					actions.push(action);
+					object.traverse( function ( child ) 
+					{
+						if ( child.isMesh ) 
+						{
+							child.castShadow = true;
+							child.receiveShadow = true;
+						}
+					});
+
+					scene.add( object );
+					loadAnimation(loader);
+				});
+
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.shadowMap.enabled = true;
+				container.appendChild( renderer.domElement );
+
+				const controls = new OrbitControls( camera, renderer.domElement );
+				controls.target.set( 0, 100, 0 );
+				controls.update();
+
+				window.addEventListener( 'resize', onWindowResize );
+
+				// stats
+				stats = new Stats();
+				container.appendChild( stats.dom );
+
+				var params = 
+				{
+					modelcolor : "#ff0000",
+					directionlight : "true",
+					pointcolor : pointColor,
+					X : 0,
+					Y : 0,
+					Z : 0
+				}
+				var gui = new GUI();
+				var floorfolder = gui.addFolder('地板');
+				floorfolder.addColor(params, 'modelcolor')
+					.name('Color')
+					.onChange(function()
+					{
+						meshPhongMaterial.color.set(params.modelcolor);
+					});
+				floorfolder.add(mesh, 'visible')
+					.name('Visible');
+
+				var lightfolder = gui.addFolder('燈光');
+				lightfolder.addColor(params,'pointcolor')
+					.name('Light Color')
+					.onChange(function(e)
+					{
+						dirLight.color = new THREE.Color(e);
+						hemiLight.color = new THREE.Color(e);
+					});
+
+				['X', 'Y', 'Z'].forEach(function(val)
+				{
+					lightfolder.add(params,val)
+					.min(0)
+					.max(500)
+					.step(10)
+					.onChange(function()
+					{
+						dirLight.position.set(params.X, params.Y, params.Z);
+						hemiLight.position.set(params.X, params.Y, params.Z);
+					});
+				});
+
+				floorfolder.open();
+				lightfolder.open();
+			}
+
+			function loadAnimation( loader )
+			{
+				const anim = anims.shift();
+				
+				loader.load(`Mouse-${anim}.fbx`, function(object)
+				{
+					const action = mixer.clipAction( object.animations[0] );
+					if (anim == 'Die')
+					{
+						action.loop = THREE.LoopOnce;
+						action.clampWhenFinished = true;
+    				}
+					actions.push(action);
+					if (anims.length>0)
+					{
+						loadAnimation(loader);
+					}
+					else
+					{
+						update();
+					}
+				})
+			}
+
+			function playAction(index)
+			{
+				const action = actions[index];
+				mixer.stopAllAction();
+				action.reset();
+				action.fadeIn(0.5);
+				action.play();
+			}
+
+			function update()
+			{
+				requestAnimationFrame( update );
+				renderer.render( scene, camera );
+				const dt = clock.getDelta();
+				mixer.update(dt);
+			}
+
+			function onWindowResize() 
+			{
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+			}
+
+			//
+
+			function animate() 
+			{
+				requestAnimationFrame( animate );
+
+				const delta = clock.getDelta();
+
+				if ( mixer ) mixer.update( delta );
+
+				renderer.render( scene, camera );
+
+				stats.update();
+			}
+
+		</script>
+
+	</body>
+</html>
