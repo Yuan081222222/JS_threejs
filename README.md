@@ -1,3 +1,3 @@
 # JS_threejs
 Learning to use three.js<br>
-Code path:/examples/CG_Final.html
+Code path: CG_Final/three.js-master/examples/CG_Final.html
